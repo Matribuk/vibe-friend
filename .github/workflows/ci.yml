@@ -12,6 +12,9 @@ on:
       - '**/*.swift'
       - 'Package.swift'
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: macos-15
