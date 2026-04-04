@@ -20,6 +20,10 @@ cp "$BUILD_DIR/$APP_NAME" "$MACOS/$APP_NAME"
 # Copy Info.plist
 cp "Sources/VibeFriend/Info.plist" "$CONTENTS/Info.plist"
 
+# Copy app icon
+mkdir -p "$CONTENTS/Resources"
+cp "Sources/VibeFriend/Resources/AppIcon.icns" "$CONTENTS/Resources/AppIcon.icns"
+
 # Code sign (requires Developer ID Application cert in Keychain)
 if security find-identity -v -p codesigning | grep -q "Developer ID Application"; then
     CERT=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)"/\1/')

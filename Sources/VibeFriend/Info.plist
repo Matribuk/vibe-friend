@@ -10,6 +10,8 @@
     <string>VibeFriend needs to read window positions to walk along your Warp terminal.</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleName</key>
     <string>VibeFriend</string>
     <key>CFBundleIdentifier</key>
