@@ -6,6 +6,8 @@
 
 **Tiny AI companions that live on your macOS dock while you vibe-code.**
 
+If it makes your setup a little more alive, a ⭐ goes a long way!
+
 One pet per running session — each with its own color.
 They walk when your agent is busy, pause when it's waiting on you.
 
