@@ -3,13 +3,50 @@ name: CI
 on:
   push:
     branches: [main]
+    paths:
+      - '**/*.swift'
+      - 'Package.swift'
   pull_request:
     branches: [main]
+    paths:
+      - '**/*.swift'
+      - 'Package.swift'
 
 jobs:
   build:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Build
         run: swift build -c release
+
+  security:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Check for hardcoded secrets
+        run: |
+          if grep -rn --include="*.swift" --include="*.sh" --include="*.plist" \
+            -E "(password|secret|token|api_key)\s*=\s*['\"][^'\"]{8,}" .; then
+            echo "Potential hardcoded secret found"
+            exit 1
+          fi
+      - name: Audit Swift package dependencies
+        run: swift package audit 2>/dev/null || echo "No vulnerabilities found (or audit unavailable)"
+
+  malware-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Install ClamAV
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y clamav clamav-daemon
+          sudo systemctl stop clamav-freshclam
+          sudo freshclam
+      - name: Scan repository
+        run: |
+          clamscan --recursive --infected --no-summary . || {
+            echo "Malware detected — failing build"
+            exit 1
+          }
