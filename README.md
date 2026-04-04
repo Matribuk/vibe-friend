@@ -9,6 +9,7 @@
 One pet per running session — each with its own color.
 They walk when your agent is busy, pause when it's waiting on you.
 
+[![CI](https://github.com/Matribuk/vibe-friend/actions/workflows/ci.yml/badge.svg)](https://github.com/Matribuk/vibe-friend/actions/workflows/ci.yml)
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black?logo=apple)](../../releases/latest)
 [![Swift 5.9](https://img.shields.io/badge/Swift-5.9-orange?logo=swift)](https://swift.org)
 [![MIT](https://img.shields.io/badge/license-MIT-blue)](#license)
