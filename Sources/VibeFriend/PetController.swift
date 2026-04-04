@@ -47,7 +47,6 @@ final class PetController {
         case .running(let pids):
             let current = Set(pids)
             let known   = Set(instances.keys)
-
             for pid in current.subtracting(known) {
                 let ttyPath = self.ttyPath(forPID: pid)
                 let screen = NSScreen.main ?? NSScreen.screens[0]

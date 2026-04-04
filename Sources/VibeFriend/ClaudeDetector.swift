@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 // Schedules a timer in .common mode so it fires during menu tracking too.
 func makeCommonTimer(withTimeInterval interval: TimeInterval, repeats: Bool, block: @escaping (Timer) -> Void) -> Timer {
@@ -72,17 +73,25 @@ final class ClaudeDetector {
         }
     }
 
-    // Step 1: fast scan with `comm` for native binaries.
-    // Step 2: for interpreter processes (node/python), check their args for interpreted targets.
+    // Step 1: fast sysctl scan — uses p_comm first, then KERN_PROCARGS2 for the real executable
+    //         name when p_comm looks non-standard (e.g. claude sets p_comm to its version string).
+    // Step 2: for interpreter processes (node/python), check their args via ps (per-PID, fast).
     private func agentPIDs() -> [Int32] {
-        let allProcs = runPS(["-eo", "pid,comm"])
+        let allProcs = sysctlProcessList()
         var results: [Int32] = []
         var interpreterPIDs: [Int32] = []
 
-        for line in allProcs.split(separator: "\n") {
-            let parts = line.trimmingCharacters(in: .whitespaces).split(separator: " ", maxSplits: 1)
-            guard parts.count == 2, let pid = Int32(parts[0]) else { continue }
-            let name = (String(parts[1]) as NSString).lastPathComponent
+        for (pid, comm) in allProcs {
+            // comm might be the real name, or it might be something set by the process (e.g. "2.1.92").
+            // Fall back to the executable basename from KERN_PROCARGS2 when needed.
+            let name: String
+            if nativeTargets.contains(comm) || interpreters.contains(comm) {
+                name = comm
+            } else {
+                // Check actual executable path for processes with non-standard p_comm.
+                name = executableBasename(for: pid) ?? comm
+            }
+
             if nativeTargets.contains(name) {
                 results.append(pid)
             } else if interpreters.contains(name) {
@@ -90,7 +99,7 @@ final class ClaudeDetector {
             }
         }
 
-        // For each interpreter process, fetch its args individually (avoids bulk args scan hanging).
+        // For each interpreter process, fetch its args individually.
         // Group by detected tool name — keep only the lowest PID (main process) per tool.
         var interpretedByTool: [String: Int32] = [:]
         for pid in interpreterPIDs.sorted() {
@@ -111,6 +120,45 @@ final class ClaudeDetector {
         return results
     }
 
+    // Returns [(pid, p_comm)] for all running processes using sysctl — no subprocess, no hang risk.
+    private func sysctlProcessList() -> [(Int32, String)] {
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0]
+        var size = 0
+        guard sysctl(&mib, 4, nil, &size, nil, 0) == 0, size > 0 else { return [] }
+
+        let count = size / MemoryLayout<kinfo_proc>.stride
+        var procs = [kinfo_proc](repeating: kinfo_proc(), count: count)
+        guard sysctl(&mib, 4, &procs, &size, nil, 0) == 0 else { return [] }
+
+        return procs.compactMap { p -> (Int32, String)? in
+            let pid = p.kp_proc.p_pid
+            guard pid > 0 else { return nil }
+            var comm = p.kp_proc.p_comm
+            let name = withUnsafePointer(to: &comm) {
+                $0.withMemoryRebound(to: CChar.self, capacity: Int(MAXCOMLEN) + 1) {
+                    String(cString: $0)
+                }
+            }
+            return (pid, name)
+        }
+    }
+
+    // Returns the last component of the executable path for a PID via KERN_PROCARGS2.
+    // This is the real binary name even when the process has changed its p_comm.
+    private func executableBasename(for pid: Int32) -> String? {
+        var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
+        var size = 0
+        guard sysctl(&mib, 3, nil, &size, nil, 0) == 0, size > MemoryLayout<Int32>.size else { return nil }
+        var buf = [CChar](repeating: 0, count: size)
+        guard sysctl(&mib, 3, &buf, &size, nil, 0) == 0 else { return nil }
+        // Format: [int argc][null-terminated executable path][args...]
+        let path = buf.withUnsafeBufferPointer { ptr in
+            String(cString: ptr.baseAddress!.advanced(by: MemoryLayout<Int32>.size))
+        }
+        guard !path.isEmpty else { return nil }
+        return (path as NSString).lastPathComponent
+    }
+
     private func runPS(_ args: [String]) -> String {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/bin/ps")
@@ -118,7 +166,20 @@ final class ClaudeDetector {
         let pipe = Pipe()
         task.standardOutput = pipe
         task.standardError = FileHandle.nullDevice
-        try? task.run(); task.waitUntilExit()
-        return String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        do { try task.run() } catch { return "" }
+
+        // Read with a 3-second timeout to guard against any hung process.
+        var output = ""
+        let sema = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .utility).async {
+            output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            sema.signal()
+        }
+        if sema.wait(timeout: .now() + 3) == .timedOut {
+            task.terminate()
+        } else {
+            task.waitUntilExit()
+        }
+        return output
     }
 }
