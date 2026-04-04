@@ -8,11 +8,13 @@ final class SpriteSheet {
     var currentFrame: NSImage? { frames.isEmpty ? nil : frames[frameIndex] }
     var hasFrames: Bool { !frames.isEmpty }
 
-    func load(_ names: [String], hue: CGFloat? = nil) {
+    func load(_ names: [String], hue: CGFloat? = nil, grayscale: Bool = false) {
         frames = names.compactMap { name in
             guard let url = Bundle.module.url(forResource: name, withExtension: "png"),
                   let img = NSImage(contentsOf: url) else { return nil }
-            return hue.map { recolor(img, targetHue: Float($0)) } ?? img
+            // Apply hue tint first (preserves luminance variance), then desaturate if monochrome.
+            let tinted = hue.map { recolor(img, targetHue: Float($0)) } ?? img
+            return grayscale ? toGrayscale(tinted) : tinted
         }
         frameIndex = 0
     }
@@ -24,6 +26,30 @@ final class SpriteSheet {
 
     func reset() {
         frameIndex = 0
+    }
+
+    // MARK: - Grayscale
+
+    private func toGrayscale(_ image: NSImage) -> NSImage {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return image }
+        let w = cgImage.width, h = cgImage.height
+        let bytesPerRow = w * 4
+        var pixels = [UInt8](repeating: 0, count: h * bytesPerRow)
+        guard let ctx = CGContext(data: &pixels, width: w, height: h,
+                                  bitsPerComponent: 8, bytesPerRow: bytesPerRow,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return image }
+        ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: w, height: h))
+
+        for i in stride(from: 0, to: pixels.count, by: 4) {
+            guard pixels[i + 3] > 10 else { continue }
+            let r = Float(pixels[i]), g = Float(pixels[i + 1]), b = Float(pixels[i + 2])
+            let luma = UInt8(0.299 * r + 0.587 * g + 0.114 * b)
+            pixels[i] = luma; pixels[i + 1] = luma; pixels[i + 2] = luma
+        }
+
+        guard let newCG = ctx.makeImage() else { return image }
+        return NSImage(cgImage: newCG, size: image.size)
     }
 
     // MARK: - Hue replacement

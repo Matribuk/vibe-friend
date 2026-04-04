@@ -10,6 +10,7 @@ If it makes your setup a little more alive, a ⭐ goes a long way!
 
 One pet per running session — each with its own color.
 They walk when your agent is busy, pause when it's waiting on you.
+Customize size and toggle monochrome mode from the menu bar.
 
 [![CI](https://github.com/Matribuk/vibe-friend/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Matribuk/vibe-friend/actions/workflows/ci.yml)
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black?logo=apple)](../../releases/latest)
@@ -62,6 +63,8 @@ mv VibeFriend.app /Applications/
 - **Click-through** — transparent pixels pass clicks straight through to your apps below
 - **Always visible** — works across all Spaces, fullscreen, and Mission Control
 - **Any terminal** — Warp, iTerm, Terminal.app, or anything else
+- **Monochrome mode** — toggle from the menu bar to switch all pets to grayscale, with luminance variance preserved per color
+- **Adjustable size** — slider in the menu bar from 0.5× to 2×, persisted across restarts
 
 ---
 

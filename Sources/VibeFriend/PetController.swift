@@ -5,8 +5,21 @@ final class PetController {
 
     private let claudeDetector = ClaudeDetector()
     private var instances: [Int32: PetInstance] = [:]
+    private var hues: [Int32: CGFloat] = [:]   // original hue per PID
     private var pollTimer: Timer?
     private var nextHue: CGFloat = CGFloat.random(in: 0...1)
+
+    var petScale: CGFloat = 1.0 {
+        didSet { instances.values.forEach { $0.resize(scale: petScale) } }
+    }
+
+    var isMonochrome: Bool = false {
+        didSet {
+            instances.forEach { pid, instance in
+                instance.updateTint(hues[pid], monochrome: isMonochrome)
+            }
+        }
+    }
 
     // MARK: - Lifecycle
 
@@ -15,7 +28,7 @@ final class PetController {
             self?.handleClaudeEvent(event)
         }
         claudeDetector.start()
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 10.0, repeats: true) { [weak self] _ in
+        pollTimer = makeCommonTimer(withTimeInterval: 1.0 / 10.0, repeats: true) { [weak self] _ in
             self?.instances.values.forEach { $0.update() }
         }
     }
@@ -38,21 +51,26 @@ final class PetController {
             for pid in current.subtracting(known) {
                 let ttyPath = self.ttyPath(forPID: pid)
                 let screen = NSScreen.main ?? NSScreen.screens[0]
-                let startX = screen.visibleFrame.midX
-                let tint = nextHue
+                let mid = screen.visibleFrame.midX
+                let spread = screen.visibleFrame.width * 0.15
+                let startX = mid + CGFloat.random(in: -spread...spread)
+                let hue = nextHue
                 nextHue = (nextHue + 0.618).truncatingRemainder(dividingBy: 1.0)
-                instances[pid] = PetInstance(pid: pid, ttyPath: ttyPath, startX: startX, tintHue: tint)
+                hues[pid] = hue
+                instances[pid] = PetInstance(pid: pid, ttyPath: ttyPath, startX: startX, tintHue: hue, monochrome: isMonochrome, scale: petScale)
             }
 
             for pid in known.subtracting(current) {
                 instances[pid]?.fadeOut { [weak self] in
                     self?.instances.removeValue(forKey: pid)
+                    self?.hues.removeValue(forKey: pid)
                 }
             }
 
         case .allStopped:
             instances.values.forEach { $0.fadeOut {} }
             instances.removeAll()
+            hues.removeAll()
         }
     }
 

@@ -20,9 +20,10 @@ cp "$BUILD_DIR/$APP_NAME" "$MACOS/$APP_NAME"
 # Copy Info.plist
 cp "Sources/VibeFriend/Info.plist" "$CONTENTS/Info.plist"
 
-# Copy app icon
+# Copy app icon and SPM resource bundle (sprites, SVG icon)
 mkdir -p "$CONTENTS/Resources"
 cp "Sources/VibeFriend/Resources/AppIcon.icns" "$CONTENTS/Resources/AppIcon.icns"
+cp -r "$BUILD_DIR/${APP_NAME}_${APP_NAME}.bundle" "$CONTENTS/Resources/"
 
 # Code sign (requires Developer ID Application cert in Keychain)
 if security find-identity -v -p codesigning | grep -q "Developer ID Application"; then

@@ -10,7 +10,9 @@ final class PetInstance {
 
     let pid: Int32
 
-    private let petSize = CGSize(width: 64, height: 125)
+    static let baseSize = CGSize(width: 64, height: 125)
+    private var scale: CGFloat = 1.0
+    private var petSize: CGSize { CGSize(width: Self.baseSize.width * scale, height: Self.baseSize.height * scale) }
     private let walkSpeed: CGFloat = 4.0
 
     private let petWindow: NSWindow
@@ -23,7 +25,8 @@ final class PetInstance {
     private var petY: CGFloat = 0
 
     private let ttyPath: String?
-    private let tintHue: CGFloat?
+    private var tintHue: CGFloat?
+    private var isMonochrome: Bool = false
     private var isThinking = true   // assume active on spawn; TTY timer corrects within 0.5s
     private var ttyTimer: Timer?
 
@@ -52,14 +55,16 @@ final class PetInstance {
 
     var animTimer: Timer?
 
-    init(pid: Int32, ttyPath: String?, startX: CGFloat, tintHue: CGFloat?) {
+    init(pid: Int32, ttyPath: String?, startX: CGFloat, tintHue: CGFloat?, monochrome: Bool = false, scale: CGFloat = 1.0) {
         self.pid = pid
         self.ttyPath = ttyPath
         self.tintHue = tintHue
+        self.isMonochrome = monochrome
+        self.scale = scale
         self.petX = startX
 
-        let rect = NSRect(origin: .zero, size: petSize)
-        petWindow = NSWindow(contentRect: rect, styleMask: .borderless,
+        let size = CGSize(width: Self.baseSize.width * scale, height: Self.baseSize.height * scale)
+        petWindow = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: .borderless,
                              backing: .buffered, defer: false)
         petWindow.isOpaque = false
         petWindow.backgroundColor = .clear
@@ -70,7 +75,7 @@ final class PetInstance {
         petWindow.isReleasedWhenClosed = false
         petWindow.alphaValue = 0
 
-        petView = PetView(frame: NSRect(origin: .zero, size: petSize))
+        petView = PetView(frame: NSRect(origin: .zero, size: size))
         petView.wantsLayer = true
         petWindow.contentView = petView
 
@@ -86,7 +91,7 @@ final class PetInstance {
 
     private func startAnimTimer(interval: TimeInterval = 0.25) {
         animTimer?.invalidate()
-        animTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+        animTimer = makeCommonTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             self?.stepAnimation()
         }
     }
@@ -148,7 +153,7 @@ final class PetInstance {
 
     private func forceLoad(_ names: [String]) {
         currentFrameNames = names
-        spriteSheet.load(names, hue: tintHue)
+        spriteSheet.load(names, hue: tintHue, grayscale: isMonochrome)
         petView.currentFrame = spriteSheet.currentFrame
     }
 
@@ -289,7 +294,7 @@ final class PetInstance {
     private func startFall(to floorY: CGFloat) {
         isFalling = true
         fallVelocity = 0
-        fallTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+        fallTimer = makeCommonTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             guard let self else { return }
             self.fallVelocity += 2.0          // gravity (points/frame²)
             self.petY -= self.fallVelocity
@@ -312,7 +317,7 @@ final class PetInstance {
     // MARK: - Thinking detection
 
     private func startTTYTimer() {
-        ttyTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+        ttyTimer = makeCommonTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             self?.updateThinkingState()
         }
     }
@@ -337,6 +342,21 @@ final class PetInstance {
             transitionTarget = thinkFrames
             transitionFramesLeft = 2
         }
+    }
+
+    // MARK: - Tint
+
+    func updateTint(_ hue: CGFloat?, monochrome: Bool) {
+        tintHue = hue
+        isMonochrome = monochrome
+        forceLoad(currentFrameNames)
+    }
+
+    func resize(scale newScale: CGFloat) {
+        scale = newScale
+        let size = petSize
+        petWindow.setContentSize(size)
+        petView.frame = NSRect(origin: .zero, size: size)
     }
 
     // MARK: - Lifecycle
