@@ -81,8 +81,10 @@ Watches process names via `ps` and TTY file activity to animate the pets — not
 
 ## Credits
 
-- **Character & sprites** — original character by [sisyphus-dev-ai](https://github.com/sisyphus-dev-ai) and the [Claw Code team](https://github.com/ultraworkers/claw-code). Sprites generated with Gemini AI from their original asset.
+- **Character & sprites** — original character by [sisyphus-dev-ai](https://github.com/sisyphus-dev-ai) and the [Claw Code team](https://github.com/ultraworkers/claw-code). Sprites generated with Gemini AI from their original asset. Their permission was not explicitly requested — if you'd like the asset changed or removed, please [open an issue](../../issues) or reach out directly.
 - **Concept** — dock pet idea inspired by [lil-agents](https://github.com/ryanstephen/lil-agents) by Ryan Stephen.
+
+> **Open to contributions** — if you want to replace the character, add an asset picker, or contribute your own sprites, PRs are very welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
