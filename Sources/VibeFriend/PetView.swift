@@ -1,9 +1,11 @@
 import AppKit
 
+
 final class PetView: NSView {
 
     var currentFrame: NSImage? { didSet { needsDisplay = true } }
     var isFacingLeft: Bool = false { didSet { needsDisplay = true } }
+    var isOnWater: Bool = false { didSet { needsDisplay = true } }
 
     // Drag callbacks — set by PetInstance
     var onDragBegan: ((NSPoint) -> Void)?
@@ -54,6 +56,30 @@ final class PetView: NSView {
         dirtyRect.fill()
         guard let image = currentFrame else { return }
         drawSprite(image, in: bounds)
+        if isOnWater { drawBoat(in: bounds) }
+    }
+
+    private func drawBoat(in rect: NSRect) {
+        let bw = rect.width * 1.1
+        let bh = max(10, rect.height * 0.13)
+        let bx = (rect.width - bw) / 2
+        let by: CGFloat = 0
+
+        let hull = NSBezierPath()
+        hull.move(to: NSPoint(x: bx,              y: by + bh * 0.55))
+        hull.line(to: NSPoint(x: bx + bw,         y: by + bh * 0.55))
+        hull.line(to: NSPoint(x: bx + bw * 0.82,  y: by))
+        hull.line(to: NSPoint(x: bx + bw * 0.18,  y: by))
+        hull.close()
+        NSColor(red: 0.55, green: 0.36, blue: 0.18, alpha: 1).setFill()
+        hull.fill()
+
+        NSColor(red: 0.72, green: 0.52, blue: 0.28, alpha: 1).setFill()
+        NSRect(x: bx, y: by + bh * 0.50, width: bw, height: bh * 0.14).fill()
+
+        hull.lineWidth = 1
+        NSColor.black.withAlphaComponent(0.55).setStroke()
+        hull.stroke()
     }
 
     private func drawSprite(_ image: NSImage, in rect: NSRect) {

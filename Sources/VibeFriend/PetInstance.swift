@@ -21,7 +21,7 @@ final class PetInstance {
 
     private var animState: AnimationState = .idle
     private var direction: Direction = .right
-    private var petX: CGFloat
+    var petX: CGFloat
     private var petY: CGFloat = 0
 
     private let ttyPath: String?
@@ -54,6 +54,12 @@ final class PetInstance {
     private var layoutCacheTime: Date = .distantPast
 
     var animTimer: Timer?
+
+    // MARK: - Building mode
+    weak var blockWorld: BlockWorld?
+    private var isBuilding = false
+    var buildTargetX: CGFloat? = nil
+    private var pendingBuildEntry: (pos: GridPos, block: PlacedBlock)? = nil
 
     init(pid: Int32, ttyPath: String?, startX: CGFloat, tintHue: CGFloat?, monochrome: Bool = false, scale: CGFloat = 1.0) {
         self.pid = pid
@@ -112,6 +118,40 @@ final class PetInstance {
             return
         }
 
+        if isBuilding {
+            if let target = buildTargetX {
+                // Walk toward the target column.
+                loadIfNeeded(petView.isOnWater ? dragFrames : walkFrames)
+                let step: CGFloat = walkSpeed * 1.8
+                if abs(petX - target) <= step {
+                    petX = target
+                    buildTargetX = nil
+                    petView.isFacingLeft = direction.isFacingLeft
+                    // Place the pending block from this position, then pull next.
+                    if let entry = pendingBuildEntry, let world = blockWorld {
+                        pendingBuildEntry = nil
+                        world.placeBlock(gridX: entry.pos.x, gridY: entry.pos.y,
+                                         type: entry.block.type, tintHue: entry.block.tintHue)
+                    }
+                    requestNextBlock()
+                } else if petX < target {
+                    petX += step
+                    petView.isFacingLeft = false
+                } else {
+                    petX -= step
+                    petView.isFacingLeft = true
+                }
+                spriteSheet.advance()
+                petView.currentFrame = spriteSheet.currentFrame
+            } else {
+                // Queue empty — stand still and think.
+                loadIfNeeded(thinkFrames)
+                spriteSheet.advance()
+                petView.currentFrame = spriteSheet.currentFrame
+            }
+            return
+        }
+
         if !isThinking {
             // TTY inactive → think animation in place.
             loadIfNeeded(thinkFrames)
@@ -129,7 +169,7 @@ final class PetInstance {
         }
 
         // Walking
-        loadIfNeeded(walkFrames)
+        loadIfNeeded(petView.isOnWater ? dragFrames : walkFrames)
         let layout = dockLayout()
         guard layout.maxX > layout.minX else { return }
 
@@ -163,92 +203,26 @@ final class PetInstance {
         guard animState != .idle, !isDragging, !isFalling else { return }
         let layout = dockLayout()
         petX = max(layout.minX, min(petX, layout.maxX))
-        petY = layout.floorY
-        petWindow.setFrameOrigin(NSPoint(x: petX, y: petY))
+        // Stand on top of the highest block in our column (if any), else dock floor.
+        let midX = petX + petSize.width / 2
+        petY = blockWorld?.floorY(at: midX) ?? layout.floorY
+        petView.isOnWater = blockWorld?.topBlockType(at: midX) == .water
+        let waterOffset: CGFloat = petView.isOnWater ? -6 : 0
+        petWindow.setFrameOrigin(NSPoint(x: petX, y: petY + waterOffset))
         if !petWindow.isVisible { petWindow.orderFront(nil) }
     }
 
     // MARK: - Dock layout
-
-    private struct DockLayout {
-        let minX: CGFloat
-        let maxX: CGFloat
-        let floorY: CGFloat
-    }
 
     private func dockLayout() -> DockLayout {
         let now = Date()
         if let cached = cachedLayout, now.timeIntervalSince(layoutCacheTime) < 1.0 {
             return cached
         }
-        let result = computeDockLayout()
+        let result = computeDockLayout(petWidth: petSize.width)
         cachedLayout = result
         layoutCacheTime = now
         return result
-    }
-
-    private func computeDockLayout() -> DockLayout {
-        let screen = NSScreen.main ?? NSScreen.screens[0]
-        let sw = screen.frame.width
-        let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
-
-        guard let list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
-            return DockLayout(minX: screen.frame.minX,
-                              maxX: screen.frame.maxX - petSize.width,
-                              floorY: screen.visibleFrame.minY)
-        }
-
-        let sh = screen.frame.height
-        for dict in list {
-            guard let owner = dict[kCGWindowOwnerName as String] as? String, owner == "Dock",
-                  let bd = dict[kCGWindowBounds as String] else { continue }
-            var r = CGRect.zero
-            guard let cfDict = bd as? NSDictionary,
-                  CGRectMakeWithDictionaryRepresentation(cfDict, &r) else { continue }
-
-            if r.width >= sw * 0.3 && (r.origin.y + r.height) >= sh * 0.8 {
-                if let (dMinX, dMaxX) = dockIconArea(screenWidth: sw) {
-                    return DockLayout(minX: dMinX, maxX: dMaxX - petSize.width,
-                                      floorY: screen.visibleFrame.minY)
-                }
-                return DockLayout(minX: r.origin.x, maxX: r.origin.x + r.width - petSize.width,
-                                  floorY: screen.visibleFrame.minY)
-            }
-
-            if r.height >= sh * 0.3 {
-                return DockLayout(minX: screen.visibleFrame.minX,
-                                  maxX: screen.visibleFrame.maxX - petSize.width,
-                                  floorY: screen.frame.minY)
-            }
-        }
-
-        return DockLayout(minX: screen.frame.minX,
-                          maxX: screen.frame.maxX - petSize.width,
-                          floorY: screen.frame.minY)
-    }
-
-    private func dockIconArea(screenWidth: CGFloat) -> (CGFloat, CGFloat)? {
-        guard let prefs = UserDefaults(suiteName: "com.apple.dock") else { return nil }
-        let tileSize = prefs.double(forKey: "tilesize")
-        guard tileSize > 0 else { return nil }
-
-        let slotWidth = tileSize * 1.25
-        let apps    = (prefs.array(forKey: "persistent-apps")   as? [[String: Any]])?.count ?? 0
-        let others  = (prefs.array(forKey: "persistent-others") as? [[String: Any]])?.count ?? 0
-        let recent  = prefs.integer(forKey: "RecentApps")
-
-        var dividers = 0
-        if apps > 0 && (others > 0 || recent > 0) { dividers += 1 }
-        if others > 0 && recent > 0 { dividers += 1 }
-
-        let totalIcons = apps + others + recent
-        guard totalIcons > 0 else { return nil }
-
-        let dockWidth = CGFloat(totalIcons) * slotWidth + CGFloat(dividers) * 12.0
-        let padded    = dockWidth * 1.15
-        let dockX     = (screenWidth - padded) / 2.0
-
-        return (max(0, dockX), min(screenWidth, dockX + padded))
     }
 
     // MARK: - Drag
@@ -357,6 +331,29 @@ final class PetInstance {
         let size = petSize
         petWindow.setContentSize(size)
         petView.frame = NSRect(origin: .zero, size: size)
+    }
+
+    // MARK: - Building
+
+    func setBuilding(_ building: Bool) {
+        guard building != isBuilding else { return }
+        isBuilding = building
+        if building {
+            startAnimTimer(interval: 0.25 / 1.8)
+            requestNextBlock()
+        } else {
+            buildTargetX = nil
+            pendingBuildEntry = nil
+            startAnimTimer(interval: 0.25)
+        }
+    }
+
+    private func requestNextBlock() {
+        guard let world = blockWorld, let (pos, block) = world.nextPlanEntry() else { return }
+        pendingBuildEntry = (pos, block)
+        let centerX = world.origin.x + (CGFloat(pos.x) + 0.5) * world.cellSize
+        let layout = dockLayout()
+        buildTargetX = max(layout.minX, min(centerX - petSize.width / 2, layout.maxX))
     }
 
     // MARK: - Lifecycle

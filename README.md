@@ -10,7 +10,8 @@ If it makes your setup a little more alive, a ⭐ goes a long way!
 
 One pet per running session — each with its own color.
 They walk when your agent is busy, pause when it's waiting on you.
-Customize size and toggle monochrome mode from the menu bar.
+Go idle and they'll build a Minecraft-style world on your dock.
+Customize size, monochrome mode, and idle build timer from the menu bar.
 
 [![CI](https://github.com/Matribuk/vibe-friend/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Matribuk/vibe-friend/actions/workflows/ci.yml)
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black?logo=apple)](../../releases/latest)
@@ -65,6 +66,7 @@ mv VibeFriend.app /Applications/
 - **Any terminal** — Warp, iTerm, Terminal.app, or anything else
 - **Monochrome mode** — toggle from the menu bar to switch all pets to grayscale, with luminance variance preserved per color
 - **Adjustable size** — slider in the menu bar from 0.5× to 2×, persisted across restarts
+- **Idle build mode** — go idle for a configurable time (5s → 30min, or off) and pets automatically build a procedural island world on your dock: water, sand beaches, dirt, stone, grass — all rendered with block SVGs and cel-shading borders. Pets walk to each block position and place it, ride boats over water, and adapt to dock vs fullscreen layout
 
 ---
 

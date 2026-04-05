@@ -6,10 +6,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var monochromeItem: NSMenuItem?
     private var sizeSlider: NSSlider?
+    private var buildingSlider: NSSlider?
+    private var buildingLabel: NSTextField?
 
-    private static let monochromeKey = "monochrome"
-    private static let scaleKey = "petScale"
+    private static let monochromeKey  = "monochrome"
+    private static let scaleKey       = "petScale"
     private static let defaultScale: CGFloat = 1.0
+    private static let buildingStepKey = "buildingStep"
+
+    // nil = off, else seconds
+    private static let buildingSteps: [TimeInterval?] = [nil, 5, 15, 30, 60, 120, 300, 900, 1800]
+    private static func buildingLabel(for step: Int) -> String {
+        guard let t = buildingSteps[step] else { return "Off" }
+        if t < 60  { return "\(Int(t))s" }
+        if t < 120 { return "1min" }
+        return "\(Int(t / 60))min"
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -18,6 +30,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.isMonochrome = UserDefaults.standard.bool(forKey: Self.monochromeKey)
         let savedScale = UserDefaults.standard.object(forKey: Self.scaleKey) as? CGFloat ?? Self.defaultScale
         controller.petScale = savedScale
+        let savedBuildStep = UserDefaults.standard.object(forKey: Self.buildingStepKey) as? Int ?? 0
+        controller.buildingIdleThreshold = Self.buildingSteps[savedBuildStep] ?? nil
         petController = controller
         controller.start()
     }
@@ -46,12 +60,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         monoItem.state = isMonochrome ? .on : .off
         monochromeItem = monoItem
 
-        let sliderItem = makeSizeSliderItem()
+        let sliderItem   = makeSizeSliderItem()
+        let buildingItem = makeBuildingSliderItem()
 
         let menu = NSMenu()
         menu.addItem(monoItem)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(sliderItem)
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(buildingItem)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit VibeFriend", action: #selector(quitApp), keyEquivalent: "q"))
         statusItem?.menu = menu
@@ -80,6 +97,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let item = NSMenuItem()
         item.view = container
         return item
+    }
+
+    private func makeBuildingSliderItem() -> NSMenuItem {
+        let savedStep = UserDefaults.standard.object(forKey: Self.buildingStepKey) as? Int ?? 0
+
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 220, height: 48))
+
+        let titleLabel = NSTextField(labelWithString: "Build mode")
+        titleLabel.frame = NSRect(x: 14, y: 28, width: 120, height: 16)
+        titleLabel.font = .menuFont(ofSize: 13)
+        container.addSubview(titleLabel)
+
+        let valueLabel = NSTextField(labelWithString: Self.buildingLabel(for: savedStep))
+        valueLabel.frame = NSRect(x: 140, y: 28, width: 66, height: 16)
+        valueLabel.font = .menuFont(ofSize: 13)
+        valueLabel.alignment = .right
+        valueLabel.textColor = .secondaryLabelColor
+        buildingLabel = valueLabel
+        container.addSubview(valueLabel)
+
+        let slider = NSSlider(frame: NSRect(x: 14, y: 6, width: 192, height: 20))
+        slider.minValue = 0
+        slider.maxValue = Double(Self.buildingSteps.count - 1)
+        slider.numberOfTickMarks = Self.buildingSteps.count
+        slider.allowsTickMarkValuesOnly = true
+        slider.doubleValue = Double(savedStep)
+        slider.isContinuous = true
+        slider.target = self
+        slider.action = #selector(buildingSliderChanged(_:))
+        buildingSlider = slider
+        container.addSubview(slider)
+
+        let item = NSMenuItem()
+        item.view = container
+        return item
+    }
+
+    @objc private func buildingSliderChanged(_ sender: NSSlider) {
+        let step = Int(sender.doubleValue.rounded())
+        buildingLabel?.stringValue = Self.buildingLabel(for: step)
+        petController?.buildingIdleThreshold = Self.buildingSteps[step] ?? nil
+        UserDefaults.standard.set(step, forKey: Self.buildingStepKey)
     }
 
     @objc private func toggleMonochrome() {
