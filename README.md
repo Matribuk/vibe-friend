@@ -68,6 +68,8 @@ mv VibeFriend.app /Applications/
 - **Adjustable size** — slider in the menu bar from 0.5× to 2×, persisted across restarts
 - **Idle build mode** — go idle for a configurable time (5s → 30min, or off) and pets automatically build a procedural island world on your dock: water, sand beaches, dirt, stone, grass — all rendered with block SVGs and cel-shading borders. Pets walk to each block position and place it, ride boats over water, and adapt to dock vs fullscreen layout
 
+![build mode](afk.jpeg)
+
 ---
 
 ## Requirements
