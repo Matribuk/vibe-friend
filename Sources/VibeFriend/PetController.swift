@@ -68,7 +68,6 @@ final class PetController {
 
     private func enterBuildingMode() {
         let screen = NSScreen.main ?? NSScreen.screens[0]
-        let layout = computeDockLayout()
         let cellSize: CGFloat = max(20, PetInstance.baseSize.width * petScale * 0.45)
 
         // Use the exact pet walking zone as world bounds — pets use petWidth-adjusted maxX.
